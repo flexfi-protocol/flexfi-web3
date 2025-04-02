@@ -1,0 +1,9 @@
+/home/henrilb/SolArgosFullApp/SolArgos-frontend/target/debug/deps/libleptos_hot_reload-115605b7a690fc6e.rmeta: /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/lib.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/diff.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/node.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/parsing.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/patch.js
+
+/home/henrilb/SolArgosFullApp/SolArgos-frontend/target/debug/deps/leptos_hot_reload-115605b7a690fc6e.d: /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/lib.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/diff.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/node.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/parsing.rs /home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/patch.js
+
+/home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/lib.rs:
+/home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/diff.rs:
+/home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/node.rs:
+/home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/parsing.rs:
+/home/henrilb/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/leptos_hot_reload-0.7.8/src/patch.js:
