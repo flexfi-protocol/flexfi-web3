@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build directories
+target/
+*/target/
+build/
+dist/
+
+# Keypairs
+lender-keypair.json
+*-keypair.json
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Rust/Solana specific
+*.so
+Cargo.lock
+test-ledger/
+
+# Cache
+.cache/

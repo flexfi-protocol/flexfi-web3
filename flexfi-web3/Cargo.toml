@@ -1,0 +1,17 @@
+[package]
+name = "flexfi-program"
+version = "0.1.0"
+edition = "2021"
+description = "FlexFi: BNPL with crypto collateral"
+authors = ["FlexFi Team"]
+
+[dependencies]
+solana-program = "=1.18.17"
+thiserror = "1.0"
+borsh = "0.10.3"
+borsh-derive = "0.10.3"
+spl-token = { version = "4.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "2.0", features = ["no-entrypoint"] }
+
+[lib]
+crate-type = ["cdylib", "lib"]
