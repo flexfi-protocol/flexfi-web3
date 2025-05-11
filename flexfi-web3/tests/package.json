@@ -1,0 +1,17 @@
+{
+  "name": "tests",
+  "version": "1.0.0",
+  "main": "1-create-wallet.test.js",
+  "scripts": {
+    "test": "mocha tests/*.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bn.js": "^5.2.2",
+    "borsh": "^2.0.0",
+    "bs58": "^6.0.0"
+  }
+}
