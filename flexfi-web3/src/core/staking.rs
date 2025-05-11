@@ -9,7 +9,7 @@ use solana_program::{
     msg,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-
+use spl_associated_token_account;
 use crate::error::FlexfiError;
 use crate::state::{staking::{StakingAccount, StakingStatus}};
 use crate::constants::{STAKING_SEED, USDC_VAULT_SEED, MIN_STAKING_AMOUNT, MIN_STAKING_LOCK_DAYS, MAX_STAKING_LOCK_DAYS};
@@ -39,24 +39,24 @@ pub fn process_deposit_staking(
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // VÉRIFIER QUE L'UTILISATEUR EST WHITELISTÉ
+
+    // Vérifier que l'utilisateur est whitelisté
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
-    
+
     // Vérifier le montant minimum
     if amount < MIN_STAKING_AMOUNT {
         return Err(FlexfiError::InsufficientStaking.into());
     }
-    
+
     // Vérifier la période de verrouillage
     if lock_days < MIN_STAKING_LOCK_DAYS || lock_days > MAX_STAKING_LOCK_DAYS {
         return Err(ProgramError::InvalidArgument);
     }
-    
+
     // Trouver le PDA du compte de staking
     let seeds = [
         STAKING_SEED,
@@ -64,62 +64,64 @@ pub fn process_deposit_staking(
         usdc_mint.key.as_ref(),
     ];
     let (staking_pda, staking_bump) = Pubkey::find_program_address(&seeds, program_id);
-    
+
+    msg!("Calculated staking PDA: {}", staking_pda);
+    msg!("Received staking account: {}", staking_account.key);
+    msg!("Staking bump: {}", staking_bump);
+
     if *staking_account.key != staking_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
+
     // Trouver le PDA du vault
     let vault_seeds = [
         USDC_VAULT_SEED,
         staking_account.key.as_ref(),
     ];
     let (vault_pda, vault_bump) = Pubkey::find_program_address(&vault_seeds, program_id);
-    
-    if *vault_token_account.key != vault_pda {
-        return Err(ProgramError::InvalidAccountData);
-    }
-    
-    // Obtenir l'horodatage actuel
+
+    msg!("Calculated vault PDA: {}", vault_pda);
+    msg!("Received vault account: {}", vault_token_account.key);
+    msg!("Vault bump: {}", vault_bump);
+
+    // Obtenir l'heure actuelle
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Initialiser ou mettre à jour le compte de staking
-    let mut staking_data = if staking_account.owner == program_id {
+
+    // Initialiser ou mettre à jour le staking account
+    let mut staking_data = if !staking_account.data_is_empty() {
         // Compte existant, charger les données
         let mut data = StakingAccount::try_from_slice(&staking_account.data.borrow())?;
-        
-        // Vérifier que le staking est actif ou verrouillé (pas gelé ou fermé)
+
+        // Vérifier que le staking est actif ou verrouillé
         let status = data.get_status()?;
         if status != StakingStatus::Active && status != StakingStatus::Locked {
             return Err(FlexfiError::StakingFrozen.into());
         }
-        
-        // Mettre à jour le montant et verrouiller si nécessaire
+
+        // Mise à jour des montants et lock period
         data.amount_staked = data.amount_staked.saturating_add(amount);
-        
-        // Si l'utilisateur verrouille pour une période plus longue, mettre à jour
+
         if status == StakingStatus::Locked {
             let new_lock_end = current_time + (lock_days as i64 * 86400);
             if new_lock_end > data.lock_period_end {
                 data.lock_period_end = new_lock_end;
             }
         } else {
-            // Passer à l'état verrouillé
             data.set_status(StakingStatus::Locked);
             data.lock_period_end = current_time + (lock_days as i64 * 86400);
         }
-        
+
         data.last_update = current_time;
         data
     } else {
-        // Nouveau compte, créer d'abord le compte
+        // Nouveau staking account à créer
         let rent = Rent::get()?;
         let space = StakingAccount::SIZE;
         let rent_lamports = rent.minimum_balance(space);
-        
+
         msg!("Creating staking account with size: {}", space);
-        
+
         invoke_signed(
             &system_instruction::create_account(
                 user_account.key,
@@ -131,10 +133,9 @@ pub fn process_deposit_staking(
             &[user_account.clone(), staking_account.clone(), system_program.clone()],
             &[&[STAKING_SEED, user_account.key.as_ref(), usdc_mint.key.as_ref(), &[staking_bump]]],
         )?;
-        
-        // Créer le vault de token si nécessaire
-        if vault_token_account.owner != &spl_token::id() {
-            // Utiliser associated_token_account ou créer un token account normal
+
+        // Créer le vault ATA si nécessaire
+        if vault_token_account.data_is_empty() {
             invoke_signed(
                 &spl_associated_token_account::instruction::create_associated_token_account(
                     user_account.key,
@@ -153,7 +154,7 @@ pub fn process_deposit_staking(
                 &[&[USDC_VAULT_SEED, staking_account.key.as_ref(), &[vault_bump]]],
             )?;
         }
-        
+
         // Initialiser les données du staking
         StakingAccount::new(
             *user_account.key,
@@ -165,11 +166,11 @@ pub fn process_deposit_staking(
             staking_bump,
         )
     };
-    
+
     // Sauvegarder les données du staking
     staking_data.serialize(&mut *staking_account.data.borrow_mut())?;
-    
-    // Transférer les tokens vers le vault
+
+    // Transfert des USDC vers le vault
     let transfer_ix = spl_token::instruction::transfer(
         token_program.key,
         user_token_account.key,
@@ -178,7 +179,7 @@ pub fn process_deposit_staking(
         &[],
         amount,
     )?;
-    
+
     invoke(
         &transfer_ix,
         &[
@@ -188,10 +189,11 @@ pub fn process_deposit_staking(
             token_program.clone(),
         ],
     )?;
-    
+
     msg!("Staking deposit successful: {} units, locked for {} days", amount, lock_days);
     Ok(())
 }
+
 
 pub fn process_withdraw_staking(
     program_id: &Pubkey,
