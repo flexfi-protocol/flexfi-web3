@@ -143,7 +143,7 @@ CheckRepayment
 Track and manage user credit scores:
 
 ```rust
-// Initialize score (500 points default)
+// Initialize score (50 points default)
 InitializeScore
 
 // Update score (automatic)
@@ -188,7 +188,7 @@ flowchart TD
     B --> C[🔑 Backend creates wallet]
     C --> D[✅ Admin adds to whitelist]
     D --> E[💰 User stakes 100 USDC]
-    E --> F[📊 Score initialized: 500 pts]
+    E --> F[📊 Score initialized: 50 pts]
     F --> G[💳 Choose card tier]
     G --> H[🛍️ Ready for BNPL!]
     
@@ -345,7 +345,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🏆 Key Achievements
 
 - ✅ **Successful Staking**: 100 USDC staked ✓
-- ✅ **Score System**: 500 initial points ✓
+- ✅ **Score System**: 50 initial points ✓
 - ✅ **Whitelist Integration**: Secure access control ✓
 - ✅ **Automated Testing**: Comprehensive test suite ✓
 
