@@ -128,7 +128,7 @@ pub const MIN_STAKING_LOCK_DAYS: u16 = 7;
 pub const MAX_STAKING_LOCK_DAYS: u16 = 365;
 
 // Scoring-related constants
-pub const INITIAL_SCORE: u16 = 500;
+pub const INITIAL_SCORE: u16 = 50;
 pub const MIN_SCORE: u16 = 0;
 pub const MAX_SCORE: u16 = 1000;
 pub const SCORE_INCREASE_ON_TIME_PAYMENT: i16 = 5;
