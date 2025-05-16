@@ -12,27 +12,14 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::error::FlexfiError;
 use crate::state::whitelist::{WhitelistAccount, UserWhitelistStatus};
-use crate::constants::{WHITELIST_SEED, HARDCODED_WHITELIST};
+use crate::constants::{WHITELIST_SEED};
 
-// Check if a user is in the hardcoded list (temporary)
-pub fn is_hardcoded_whitelisted(user_pubkey: &Pubkey) -> bool {
-    let user_key_str = user_pubkey.to_string();
-    HARDCODED_WHITELIST.contains(&user_key_str.as_str())
-}
-
-// Check if a user is whitelisted (hardcoded or on-chain)
 pub fn check_user_whitelisted(
     program_id: &Pubkey,
     user_pubkey: &Pubkey,
     accounts: &[AccountInfo],
 ) -> Result<bool, ProgramError> {
-    // First check the hardcoded list
-    if is_hardcoded_whitelisted(user_pubkey) {
-        msg!("User {} is hardcoded whitelisted", user_pubkey);
-        return Ok(true);
-    }
-
-    // Then check the on-chain whitelist
+    // Check the on-chain whitelist
     let account_info_iter = &mut accounts.iter();
     let user_status_account = next_account_info(account_info_iter)?;
 
