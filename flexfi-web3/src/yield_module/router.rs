@@ -21,14 +21,14 @@ pub fn process_set_yield_strategy(
     auto_reinvest: bool,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let yield_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
     let user_status_account = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Verify user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
@@ -38,61 +38,61 @@ pub fn process_set_yield_strategy(
         user_account.key,
         user_status_account
     )?;
-    
-    // Convertir le u8 en YieldStrategy
+
+    // Convert u8 to YieldStrategy
     let yield_strategy = YieldStrategy::from_u8(strategy)?;
-    
-    // Obtenir l'adresse de stratégie personnalisée si c'est une stratégie personnalisée
+
+    // Get custom strategy address if it's a custom strategy
     let custom_strategy_address = if yield_strategy == YieldStrategy::Custom && account_info_iter.len() > 0 {
         let custom_account = next_account_info(account_info_iter)?;
         *custom_account.key
     } else {
         Pubkey::default()
     };
-    
-    // Vérifier que l'adresse personnalisée est valide pour une stratégie personnalisée
+
+    // Verify that the custom address is valid for a custom strategy
     if yield_strategy == YieldStrategy::Custom && custom_strategy_address == Pubkey::default() {
         return Err(ProgramError::InvalidArgument);
     }
-    
-    // Créer un PDA pour le compte de yield
+
+    // Create a PDA for the yield account
     let seeds = [
         YIELD_CONFIG_SEED,
         user_account.key.as_ref(),
     ];
     let (yield_pda, bump_seed) = Pubkey::find_program_address(&seeds, program_id);
-    
+
     if *yield_account.key != yield_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Créer ou mettre à jour le compte de yield
+
+    // Create or update the yield account
     if yield_account.owner == program_id {
-        // Compte existant, mettre à jour la stratégie
+        // Existing account, update the strategy
         let mut yield_data = YieldAccount::try_from_slice(&yield_account.data.borrow())?;
-        
-        // Vérifier la propriété
+
+        // Verify ownership
         if yield_data.owner != *user_account.key {
             return Err(FlexfiError::Unauthorized.into());
         }
-        
-        // Mettre à jour la stratégie
+
+        // Update the strategy
         yield_data.set_strategy(yield_strategy);
         yield_data.custom_strategy_address = custom_strategy_address;
         yield_data.auto_reinvest = auto_reinvest;
-        
-        // Sauvegarder les modifications
+
+        // Save changes
         yield_data.serialize(&mut *yield_account.data.borrow_mut())?;
     } else {
-        // Nouveau compte, le créer
+        // New account, create it
         let rent = Rent::get()?;
         let space = YieldAccount::SIZE;
         let rent_lamports = rent.minimum_balance(space);
-        
+
         invoke_signed(
             &system_instruction::create_account(
                 user_account.key,
@@ -104,8 +104,8 @@ pub fn process_set_yield_strategy(
             &[user_account.clone(), yield_account.clone(), system_program.clone()],
             &[&[YIELD_CONFIG_SEED, user_account.key.as_ref(), &[bump_seed]]],
         )?;
-        
-        // Initialiser le compte
+
+        // Initialize the account
         let yield_data = YieldAccount::new(
             *user_account.key,
             yield_strategy,
@@ -114,11 +114,11 @@ pub fn process_set_yield_strategy(
             current_time,
             bump_seed,
         );
-        
-        // Sauvegarder les données
+
+        // Save data
         yield_data.serialize(&mut *yield_account.data.borrow_mut())?;
     }
-    
+
     msg!("Yield strategy set to: {:?}, auto-reinvest: {}", yield_strategy, auto_reinvest);
     Ok(())
 }
@@ -129,36 +129,36 @@ pub fn process_route_yield(
     amount: u64,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let yield_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
     let source_token_account = next_account_info(account_info_iter)?;
     let destination_token_account = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Verify user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger les données du yield
+
+    // Load yield data
     let mut yield_data = YieldAccount::try_from_slice(&yield_account.data.borrow())?;
-    
-    // Vérifier la propriété
+
+    // Verify ownership
     if yield_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Récupérer la stratégie
+
+    // Get the strategy
     let strategy = yield_data.get_strategy()?;
-    
-    // Rediriger le yield en fonction de la stratégie
+
+    // Route yield based on the strategy
     match strategy {
         YieldStrategy::AutoCompound => {
-            // Rediriger vers la stratégie AutoCompound
+            // Route to AutoCompound strategy
             msg!("Routing yield to AutoCompound strategy: {}", amount);
-            
+
             // Transfer to auto-compound strategy
             let transfer_ix = spl_token::instruction::transfer(
                 token_program.key,
@@ -168,7 +168,7 @@ pub fn process_route_yield(
                 &[],
                 amount,
             )?;
-            
+
             invoke(
                 &transfer_ix,
                 &[
@@ -180,11 +180,10 @@ pub fn process_route_yield(
             )?;
         },
         YieldStrategy::StableCoin => {
-            // Conversion en stablecoin
+            // Convert to stablecoin
             msg!("Routing yield to StableCoin strategy: {}", amount);
-            
-            // Transfert similaire
-            // Transfert similaire
+
+            // Similar transfer
             let transfer_ix = spl_token::instruction::transfer(
                 token_program.key,
                 source_token_account.key,
@@ -193,7 +192,7 @@ pub fn process_route_yield(
                 &[],
                 amount,
             )?;
-            
+
             invoke(
                 &transfer_ix,
                 &[
@@ -205,10 +204,10 @@ pub fn process_route_yield(
             )?;
         },
         YieldStrategy::HighYield => {
-            // Rediriger vers la stratégie à haut rendement
+            // Route to high yield strategy
             msg!("Routing yield to HighYield strategy: {}", amount);
-            
-            // Transfert vers la stratégie à haut rendement
+
+            // Transfer to high yield strategy
             let transfer_ix = spl_token::instruction::transfer(
                 token_program.key,
                 source_token_account.key,
@@ -217,7 +216,7 @@ pub fn process_route_yield(
                 &[],
                 amount,
             )?;
-            
+
             invoke(
                 &transfer_ix,
                 &[
@@ -229,10 +228,10 @@ pub fn process_route_yield(
             )?;
         },
         YieldStrategy::RealWorldAssets => {
-            // Rediriger vers la stratégie d'actifs du monde réel
+            // Route to real world assets strategy
             msg!("Routing yield to RealWorldAssets strategy: {}", amount);
-            
-            // Transfert vers la stratégie d'actifs du monde réel
+
+            // Transfer to real world assets strategy
             let transfer_ix = spl_token::instruction::transfer(
                 token_program.key,
                 source_token_account.key,
@@ -241,7 +240,7 @@ pub fn process_route_yield(
                 &[],
                 amount,
             )?;
-            
+
             invoke(
                 &transfer_ix,
                 &[
@@ -253,11 +252,11 @@ pub fn process_route_yield(
             )?;
         },
         YieldStrategy::Custom => {
-            // Rediriger vers une stratégie personnalisée
-            msg!("Routing yield to Custom strategy at {}: {}", 
+            // Route to custom strategy
+            msg!("Routing yield to Custom strategy at {}: {}",
                  yield_data.custom_strategy_address, amount);
-            
-            // Transfert vers la stratégie personnalisée
+
+            // Transfer to custom strategy
             let transfer_ix = spl_token::instruction::transfer(
                 token_program.key,
                 source_token_account.key,
@@ -266,7 +265,7 @@ pub fn process_route_yield(
                 &[],
                 amount,
             )?;
-            
+
             invoke(
                 &transfer_ix,
                 &[
@@ -278,18 +277,18 @@ pub fn process_route_yield(
             )?;
         },
     }
-    
-    // Enregistrer le yield gagné
+
+    // Record yield earned
     yield_data.record_yield_earned(amount);
-    
-    // Mettre à jour la date du dernier yield
+
+    // Update last yield date
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
     yield_data.last_yield_claimed = current_time;
-    
-    // Sauvegarder les modifications
+
+    // Save changes
     yield_data.serialize(&mut *yield_account.data.borrow_mut())?;
-    
+
     Ok(())
 }
 

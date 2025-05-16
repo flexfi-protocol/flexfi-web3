@@ -20,7 +20,7 @@ pub fn process_attach_nft(
     card_id: [u8; 32],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let attachment_account = next_account_info(account_info_iter)?;
     let nft_metadata_account = next_account_info(account_info_iter)?;
     let nft_mint = next_account_info(account_info_iter)?;
@@ -28,62 +28,62 @@ pub fn process_attach_nft(
     let user_status_account = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
+
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
 
-    // Vérifier les métadonnées NFT
+    // Verify NFT metadata
     let nft_seeds = [
         NFT_METADATA_SEED,
         nft_mint.key.as_ref(),
     ];
     let (nft_metadata_pda, _) = Pubkey::find_program_address(&nft_seeds, program_id);
-    
+
     if *nft_metadata_account.key != nft_metadata_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Charger les métadonnées NFT
+
+    // Load NFT metadata
     let nft_metadata = NFTMetadataAccount::try_from_slice(&nft_metadata_account.data.borrow())?;
-    
-    // Vérifier la propriété du NFT
+
+    // Verify NFT ownership
     if nft_metadata.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier si le NFT est actif
+
+    // Check if the NFT is active
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
+
     if !nft_metadata.is_active || nft_metadata.is_expired(current_time) {
         return Err(FlexfiError::NFTExpired.into());
     }
-    
-    // Créer un PDA pour l'attachement
+
+    // Create a PDA for the attachment
     let attachment_seeds = [
         NFT_ATTACHMENT_SEED,
         nft_mint.key.as_ref(),
         &card_id,
     ];
     let (attachment_pda, attachment_bump) = Pubkey::find_program_address(&attachment_seeds, program_id);
-    
+
     if *attachment_account.key != attachment_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Créer le compte d'attachement
+
+    // Create the attachment account
     let rent = Rent::get()?;
     let space = NFTAttachmentAccount::SIZE;
     let rent_lamports = rent.minimum_balance(space);
-    
+
     invoke_signed(
         &system_instruction::create_account(
             user_account.key,
@@ -95,8 +95,8 @@ pub fn process_attach_nft(
         &[user_account.clone(), attachment_account.clone(), system_program.clone()],
         &[&[NFT_ATTACHMENT_SEED, nft_mint.key.as_ref(), &card_id, &[attachment_bump]]],
     )?;
-    
-    // Initialiser les données d'attachement
+
+    // Initialize attachment data
     let attachment = NFTAttachmentAccount::new(
         *nft_mint.key,
         *user_account.key,
@@ -104,9 +104,9 @@ pub fn process_attach_nft(
         current_time,
         attachment_bump,
     );
-    
+
     attachment.serialize(&mut *attachment_account.data.borrow_mut())?;
-    
+
     msg!("NFT attached to card successfully");
     Ok(())
 }
@@ -116,35 +116,35 @@ pub fn process_detach_nft(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let attachment_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger les données d'attachement
+
+    // Load attachment data
     let mut attachment = NFTAttachmentAccount::try_from_slice(&attachment_account.data.borrow())?;
-    
-    // Vérifier la propriété
+
+    // Verify ownership
     if attachment.user_wallet != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Désactiver l'attachement
+
+    // Deactivate the attachment
     attachment.is_active = false;
-    
-    // Mettre à jour l'horodatage
+
+    // Update the timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    attachment.attached_at = current_time; // Utiliser attached_at comme "detached_at"
-    
-    // Sauvegarder les modifications
+    attachment.attached_at = current_time; // Use attached_at as "detached_at"
+
+    // Save changes
     attachment.serialize(&mut *attachment_account.data.borrow_mut())?;
-    
+
     msg!("NFT detached from card");
     Ok(())
 }

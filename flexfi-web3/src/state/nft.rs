@@ -21,7 +21,7 @@ impl NFTType {
             NFTType::Gold => 3,
         }
     }
-    
+
     pub fn from_u8(value: u8) -> Result<Self, ProgramError> {
         match value {
             0 => Ok(NFTType::None),
@@ -48,7 +48,7 @@ pub struct NFTMetadataAccount {
 
 impl NFTMetadataAccount {
     pub const SIZE: usize = 32 + 32 + 1 + 1 + 2 + 8 + 8 + 1 + 1; // 86 bytes
-    
+
     pub fn new(
         mint: Pubkey,
         owner: Pubkey,
@@ -59,7 +59,7 @@ impl NFTMetadataAccount {
         bump: u8,
     ) -> Self {
         let expiry_time = creation_time + (duration_days as i64 * 86400);
-        
+
         Self {
             mint,
             owner,
@@ -72,15 +72,15 @@ impl NFTMetadataAccount {
             bump,
         }
     }
-    
+
     pub fn get_nft_type(&self) -> Result<NFTType, ProgramError> {
         NFTType::from_u8(self.nft_type)
     }
-    
+
     pub fn is_expired(&self, current_time: i64) -> bool {
         current_time >= self.expiry_time
     }
-    
+
     pub fn extend_duration(&mut self, additional_days: u16) {
         self.duration_days = self.duration_days.saturating_add(additional_days);
         self.expiry_time = self.expiry_time.saturating_add((additional_days as i64) * 86400);
@@ -99,7 +99,7 @@ pub struct NFTAttachmentAccount {
 
 impl NFTAttachmentAccount {
     pub const SIZE: usize = 32 + 32 + 32 + 8 + 1 + 1; // 106 bytes
-    
+
     pub fn new(
         nft_mint: Pubkey,
         user_wallet: Pubkey,

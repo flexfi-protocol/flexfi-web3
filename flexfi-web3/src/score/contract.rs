@@ -19,46 +19,46 @@ pub fn process_initialize_score(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let score_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
     let user_status_account = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
+
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
 
-    // Créer un PDA pour le compte de score
+    // Create a PDA for the score account
     let seeds = [
         SCORE_SEED,
         user_account.key.as_ref(),
     ];
     let (score_pda, bump_seed) = Pubkey::find_program_address(&seeds, program_id);
-    
+
     if *score_account.key != score_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Vérifier si le compte existe déjà
+
+    // Check if the account already exists
     if score_account.owner == program_id {
         msg!("Score account already exists");
         return Ok(());
     }
-    
-    // Créer le compte de score
+
+    // Create the score account
     let rent = Rent::get()?;
     let space = ScoreAccount::SIZE;
     let rent_lamports = rent.minimum_balance(space);
-    
+
     invoke_signed(
         &system_instruction::create_account(
             user_account.key,
@@ -70,22 +70,22 @@ pub fn process_initialize_score(
         &[user_account.clone(), score_account.clone(), system_program.clone()],
         &[&[SCORE_SEED, user_account.key.as_ref(), &[bump_seed]]],
     )?;
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Initialiser le compte avec un score initial
+
+    // Initialize the account with an initial score
     let score_data = ScoreAccount::new(
         *user_account.key,
         INITIAL_SCORE,
         current_time,
         bump_seed,
     );
-    
-    // Sauvegarder les données
+
+    // Save data
     score_data.serialize(&mut *score_account.data.borrow_mut())?;
-    
+
     msg!("Score initialized with initial score of {}", INITIAL_SCORE);
     Ok(())
 }
@@ -96,30 +96,30 @@ pub fn process_update_score(
     change: i16,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let score_account = next_account_info(account_info_iter)?;
     let authority_account = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'autorité
-    // Dans une implémentation réelle, vérifier si l'autorité est autorisée
+
+    // Check authority signature
+    // In a real implementation, check if the authority is authorized
     if !authority_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger les données du score
+
+    // Load score data
     let mut score_data = ScoreAccount::try_from_slice(&score_account.data.borrow())?;
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Mettre à jour le score
+
+    // Update the score
     score_data.update_score(change, current_time);
-    
-    // Sauvegarder les modifications
+
+    // Save changes
     score_data.serialize(&mut *score_account.data.borrow_mut())?;
-    
+
     msg!("Score updated: new score = {}", score_data.score);
     Ok(())
 }
@@ -129,29 +129,29 @@ pub fn process_record_new_loan(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let score_account = next_account_info(account_info_iter)?;
     let authority_account = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'autorité
+
+    // Check authority signature
     if !authority_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger les données du score
+
+    // Load score data
     let mut score_data = ScoreAccount::try_from_slice(&score_account.data.borrow())?;
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Enregistrer le nouveau prêt
+
+    // Record the new loan
     score_data.record_new_loan(current_time);
-    
-    // Sauvegarder les modifications
+
+    // Save changes
     score_data.serialize(&mut *score_account.data.borrow_mut())?;
-    
+
     msg!("New loan recorded: total loans = {}", score_data.total_loans);
     Ok(())
 }

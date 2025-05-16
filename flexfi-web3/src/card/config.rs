@@ -7,12 +7,12 @@ use crate::constants::{CARD_STANDARD, CARD_SILVER, CARD_GOLD, CARD_PLATINUM, get
 
 pub fn get_card_annual_fee(card_type: u8) -> Result<u64, ProgramError> {
     match card_type {
-        CARD_STANDARD => Ok(0),                    // Gratuit
+        CARD_STANDARD => Ok(0),                    // Free
         CARD_SILVER => Ok(50_000_000),            // 50 USDC
         CARD_GOLD => Ok(150_000_000),             // 150 USDC
         CARD_PLATINUM => Ok(300_000_000),         // 300 USDC
         _ => {
-            msg!("Type de carte invalide: {}", card_type);
+            msg!("Invalid card type: {}", card_type);
             Err(ProgramError::InvalidArgument)
         }
     }

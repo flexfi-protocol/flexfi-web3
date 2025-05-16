@@ -23,7 +23,7 @@ pub fn process_upgrade_card(
     new_card_type: u8,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let wallet_account = next_account_info(account_info_iter)?;
     let card_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
@@ -33,8 +33,8 @@ pub fn process_upgrade_card(
     let token_program = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
@@ -44,79 +44,79 @@ pub fn process_upgrade_card(
         user_account.key,
         user_status_account
     )?;
-    
-    // Vérifier que le type de carte est valide
+
+    // Check if the card type is valid
     if new_card_type > CARD_PLATINUM {
         return Err(FlexfiError::InvalidCardType.into());
     }
-    
-    // Charger les données du wallet
+
+    // Load wallet data
     let mut wallet_data = WalletAccount::try_from_slice(&wallet_account.data.borrow())?;
-    
-    // Vérifier que l'utilisateur est le propriétaire du wallet
+
+    // Verify that the user is the owner of the wallet
     if wallet_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier que le wallet est actif
+
+    // Verify that the wallet is active
     if !wallet_data.is_active {
         return Err(FlexfiError::WalletInactive.into());
     }
-    
-    // Vérifier que le nouveau type de carte est différent et supérieur
+
+    // Verify that the new card type is different and higher
     if wallet_data.card_type == new_card_type {
         return Err(FlexfiError::AlreadyAtThisLevel.into());
     }
-    
+
     if wallet_data.card_type > new_card_type {
         return Err(ProgramError::InvalidArgument);
     }
-    
-    // Calculer les frais d'upgrade
+
+    // Calculate upgrade fees
     let current_fee = get_card_annual_fee(wallet_data.card_type)?;
     let new_fee = get_card_annual_fee(new_card_type)?;
-    
+
     let upgrade_fee = new_fee.saturating_sub(current_fee);
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Créer ou mettre à jour le compte de carte
+
+    // Create or update the card account
     if card_account.owner == program_id {
-        // Mettre à jour la carte existante
+        // Update existing card
         let mut card_data = CardAccount::try_from_slice(&card_account.data.borrow())?;
-        
-        // Vérifier que l'utilisateur est le propriétaire
+
+        // Verify that the user is the owner
         if card_data.owner != *user_account.key {
             return Err(FlexfiError::Unauthorized.into());
         }
-        
-        // Mettre à jour le type de carte
+
+        // Update card type
         card_data.card_type = new_card_type;
-        
-        // Mettre à jour la date d'expiration des frais annuels
+
+        // Update annual fee expiration date
         card_data.annual_fee_paid_until = current_time + (365 * 86400);
-        
-        // Sauvegarder les modifications
+
+        // Save changes
         card_data.serialize(&mut *card_account.data.borrow_mut())?;
     } else {
-        // Créer un nouveau compte de carte
+        // Create a new card account
         let seeds = [
             CARD_SEED,
             user_account.key.as_ref(),
         ];
         let (card_pda, card_bump) = Pubkey::find_program_address(&seeds, program_id);
-        
+
         if *card_account.key != card_pda {
             return Err(ProgramError::InvalidAccountData);
         }
-        
-        // Créer le compte
+
+        // Create the account
         let rent = Rent::get()?;
         let space = CardAccount::SIZE;
         let rent_lamports = rent.minimum_balance(space);
-        
+
         invoke_signed(
             &system_instruction::create_account(
                 user_account.key,
@@ -128,24 +128,24 @@ pub fn process_upgrade_card(
             &[user_account.clone(), card_account.clone(), system_program.clone()],
             &[&[CARD_SEED, user_account.key.as_ref(), &[card_bump]]],
         )?;
-        
-        // Initialiser les données de carte
+
+        // Initialize card data
         let card_data = CardAccount::new(
             *user_account.key,
             new_card_type,
             current_time,
             card_bump,
         );
-        
-        // Sauvegarder les données
+
+        // Save data
         card_data.serialize(&mut *card_account.data.borrow_mut())?;
     }
-    
-    // Mettre à jour le type de carte dans le wallet
+
+    // Update card type in the wallet
     wallet_data.card_type = new_card_type;
     wallet_data.serialize(&mut *wallet_account.data.borrow_mut())?;
-    
-    // Transférer les frais d'upgrade si nécessaire
+
+    // Transfer upgrade fees if necessary
     if upgrade_fee > 0 {
         let transfer_ix = spl_token::instruction::transfer(
             token_program.key,
@@ -155,7 +155,7 @@ pub fn process_upgrade_card(
             &[],
             upgrade_fee,
         )?;
-        
+
         invoke(
             &transfer_ix,
             &[
@@ -166,7 +166,7 @@ pub fn process_upgrade_card(
             ],
         )?;
     }
-    
+
     msg!("Card upgraded to type {}", new_card_type);
     Ok(())
 }

@@ -10,8 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@coral-xyz/borsh": "^0.31.1",
     "bn.js": "^5.2.2",
     "borsh": "^2.0.0",
-    "bs58": "^6.0.0"
+    "bs58": "^5.0.0"
   }
 }

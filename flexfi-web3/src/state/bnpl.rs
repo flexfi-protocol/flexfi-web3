@@ -21,7 +21,7 @@ impl BNPLStatus {
             BNPLStatus::Cancelled => 3,
         }
     }
-    
+
     pub fn from_u8(value: u8) -> Result<Self, ProgramError> {
         match value {
             0 => Ok(BNPLStatus::Active),
@@ -56,7 +56,7 @@ pub struct BNPLContractAccount {
 
 impl BNPLContractAccount {
     pub const SIZE: usize = 32 + 32 + 8 + 32 + 1 + 1 + 8 + 1 + 8 + 1 + 8 + 8 + 2 + 2 + 1 + 1 + 1; // 147 bytes
-    
+
     pub fn new(
         borrower: Pubkey,
         merchant: Pubkey,
@@ -93,33 +93,33 @@ impl BNPLContractAccount {
             bump,
         }
     }
-    
+
     pub fn get_status(&self) -> Result<BNPLStatus, ProgramError> {
         BNPLStatus::from_u8(self.status)
     }
-    
+
     pub fn set_status(&mut self, status: BNPLStatus) {
         self.status = status.to_u8();
     }
-    
+
     pub fn is_payment_due(&self, current_time: i64) -> bool {
         current_time >= self.next_payment_due
     }
-    
+
     pub fn update_after_payment(&mut self, current_time: i64) -> Result<(), ProgramError> {
         self.paid_installments += 1;
         self.last_payment_at = current_time;
-        
+
         if self.paid_installments >= self.installments {
             self.set_status(BNPLStatus::Completed);
         } else {
-            // Calculer la prochaine échéance
+            // Calculate the next due date
             self.next_payment_due = current_time + (self.payment_interval_days as i64 * 86400);
         }
-        
+
         Ok(())
     }
-    
+
     pub fn remaining_amount(&self) -> u64 {
         let remaining_installments = self.installments.saturating_sub(self.paid_installments);
         self.amount_per_installment.saturating_mul(remaining_installments as u64)

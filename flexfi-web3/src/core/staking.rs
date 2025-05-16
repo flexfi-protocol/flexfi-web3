@@ -22,10 +22,10 @@ pub fn process_deposit_staking(
     lock_days: u16,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let staking_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
-    let user_status_account = next_account_info(account_info_iter)?; // Compte whitelist
+    let user_status_account = next_account_info(account_info_iter)?; // Whitelist account
     let user_token_account = next_account_info(account_info_iter)?;
     let vault_token_account = next_account_info(account_info_iter)?;
     let usdc_mint = next_account_info(account_info_iter)?;
@@ -34,30 +34,30 @@ pub fn process_deposit_staking(
     let associated_token_program = next_account_info(account_info_iter)?;
     let _rent_sysvar = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
 
-    // Vérifier que l'utilisateur est whitelisté
+    // Check if the user is whitelisted
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
 
-    // Vérifier le montant minimum
+    // Check minimum amount
     if amount < MIN_STAKING_AMOUNT {
         return Err(FlexfiError::InsufficientStaking.into());
     }
 
-    // Vérifier la période de verrouillage
+    // Check lock period
     if lock_days < MIN_STAKING_LOCK_DAYS || lock_days > MAX_STAKING_LOCK_DAYS {
         return Err(ProgramError::InvalidArgument);
     }
 
-    // Trouver le PDA du compte de staking
+    // Find the PDA of the staking account
     let seeds = [
         STAKING_SEED,
         user_account.key.as_ref(),
@@ -73,7 +73,7 @@ pub fn process_deposit_staking(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    // Trouver le PDA du vault
+    // Find the PDA of the vault
     let vault_seeds = [
         USDC_VAULT_SEED,
         staking_account.key.as_ref(),
@@ -84,22 +84,22 @@ pub fn process_deposit_staking(
     msg!("Received vault account: {}", vault_token_account.key);
     msg!("Vault bump: {}", vault_bump);
 
-    // Obtenir l'heure actuelle
+    // Get current time
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
 
-    // Initialiser ou mettre à jour le staking account
+    // Initialize or update the staking account
     let mut staking_data = if !staking_account.data_is_empty() {
-        // Compte existant, charger les données
+        // Existing account, load data
         let mut data = StakingAccount::try_from_slice(&staking_account.data.borrow())?;
 
-        // Vérifier que le staking est actif ou verrouillé
+        // Check that staking is active or locked
         let status = data.get_status()?;
         if status != StakingStatus::Active && status != StakingStatus::Locked {
             return Err(FlexfiError::StakingFrozen.into());
         }
 
-        // Mise à jour des montants et lock period
+        // Update amounts and lock period
         data.amount_staked = data.amount_staked.saturating_add(amount);
 
         if status == StakingStatus::Locked {
@@ -115,7 +115,7 @@ pub fn process_deposit_staking(
         data.last_update = current_time;
         data
     } else {
-        // Nouveau staking account à créer
+        // New staking account to create
         let rent = Rent::get()?;
         let space = StakingAccount::SIZE;
         let rent_lamports = rent.minimum_balance(space);
@@ -134,7 +134,7 @@ pub fn process_deposit_staking(
             &[&[STAKING_SEED, user_account.key.as_ref(), usdc_mint.key.as_ref(), &[staking_bump]]],
         )?;
 
-        // Créer le vault ATA si nécessaire
+        // Create the vault ATA if necessary
         if vault_token_account.data_is_empty() {
             invoke_signed(
                 &spl_associated_token_account::instruction::create_associated_token_account(
@@ -155,7 +155,7 @@ pub fn process_deposit_staking(
             )?;
         }
 
-        // Initialiser les données du staking
+        // Initialize staking data
         StakingAccount::new(
             *user_account.key,
             *usdc_mint.key,
@@ -167,10 +167,10 @@ pub fn process_deposit_staking(
         )
     };
 
-    // Sauvegarder les données du staking
+    // Save staking data
     staking_data.serialize(&mut *staking_account.data.borrow_mut())?;
 
-    // Transfert des USDC vers le vault
+    // Transfer USDC to the vault
     let transfer_ix = spl_token::instruction::transfer(
         token_program.key,
         user_token_account.key,
@@ -194,94 +194,93 @@ pub fn process_deposit_staking(
     Ok(())
 }
 
-
 pub fn process_withdraw_staking(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let staking_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
-    let user_status_account = next_account_info(account_info_iter)?; // Compte whitelist
+    let user_status_account = next_account_info(account_info_iter)?; // Whitelist account
     let user_token_account = next_account_info(account_info_iter)?;
     let vault_token_account = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // VÉRIFIER QUE L'UTILISATEUR EST WHITELISTÉ
+
+    // CHECK IF THE USER IS WHITELISTED
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
-    
-    // Charger les données du staking
+
+    // Load staking data
     let mut staking_data = StakingAccount::try_from_slice(&staking_account.data.borrow())?;
-    
-    // Vérifier que l'utilisateur est le propriétaire
+
+    // Verify that the user is the owner
     if staking_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier l'état du staking
+
+    // Check staking status
     let status = staking_data.get_status()?;
     if status == StakingStatus::Frozen || status == StakingStatus::Closed {
         return Err(FlexfiError::StakingFrozen.into());
     }
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Si verrouillé, vérifier que la période de verrouillage est terminée
+
+    // If locked, check if the lock period has ended
     if status == StakingStatus::Locked && current_time < staking_data.lock_period_end {
         return Err(FlexfiError::StakingFrozen.into());
     }
-    
-    // Vérifier que le montant demandé est disponible
+
+    // Check if the requested amount is available
     if amount > staking_data.amount_staked {
         return Err(FlexfiError::InsufficientStaking.into());
     }
-    
-    // Mettre à jour le montant staké
+
+    // Update the staked amount
     staking_data.amount_staked = staking_data.amount_staked.saturating_sub(amount);
     staking_data.last_update = current_time;
-    
-    // Si le montant restant est inférieur au minimum, fermer le compte
+
+    // If the remaining amount is less than the minimum, close the account
     if staking_data.amount_staked < MIN_STAKING_AMOUNT {
         staking_data.set_status(StakingStatus::Closed);
     } else {
-        // Sinon, passer à l'état actif
+        // Otherwise, set to active status
         staking_data.set_status(StakingStatus::Active);
     }
-    
-    // Sauvegarder les modifications
+
+    // Save changes
     staking_data.serialize(&mut *staking_account.data.borrow_mut())?;
-    
-    // Préparer les seeds pour signer avec le PDA du vault
+
+    // Prepare seeds to sign with the vault PDA
     let vault_seeds = [
         USDC_VAULT_SEED,
         staking_account.key.as_ref(),
         &[staking_data.bump],
     ];
-    
-    // Transférer les tokens du vault vers l'utilisateur
+
+    // Transfer tokens from the vault to the user
     let transfer_ix = spl_token::instruction::transfer(
         token_program.key,
         vault_token_account.key,
         user_token_account.key,
-        &staking_account.key, // Le compte de staking est l'autorité du vault
+        &staking_account.key, // The staking account is the vault's authority
         &[],
         amount,
     )?;
-    
+
     invoke_signed(
         &transfer_ix,
         &[
@@ -292,7 +291,7 @@ pub fn process_withdraw_staking(
         ],
         &[&vault_seeds],
     )?;
-    
+
     msg!("Staking withdrawal successful: {} units", amount);
     Ok(())
 }
@@ -302,64 +301,64 @@ pub fn process_check_unlock_status(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let staking_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
-    let user_status_account = next_account_info(account_info_iter)?; // Compte whitelist
+    let user_status_account = next_account_info(account_info_iter)?; // Whitelist account
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Check user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // VÉRIFIER QUE L'UTILISATEUR EST WHITELISTÉ
+
+    // CHECK IF THE USER IS WHITELISTED
     require_whitelisted(
         program_id,
         user_account.key,
         user_status_account
     )?;
-    
-    // Charger les données du staking
+
+    // Load staking data
     let mut staking_data = StakingAccount::try_from_slice(&staking_account.data.borrow())?;
-    
-    // Vérifier que l'utilisateur est le propriétaire
+
+    // Verify that the user is the owner
     if staking_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier si le staking est verrouillé
+
+    // Check if staking is locked
     let status = staking_data.get_status()?;
     if status != StakingStatus::Locked {
         msg!("Staking is not locked");
         return Ok(());
     }
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Vérifier si la période de verrouillage est terminée
+
+    // Check if the lock period has ended
     if current_time >= staking_data.lock_period_end {
-        // Déverrouiller le staking
+        // Unlock staking
         staking_data.set_status(StakingStatus::Active);
         staking_data.last_update = current_time;
-        
-        // Sauvegarder les modifications
+
+        // Save changes
         staking_data.serialize(&mut *staking_account.data.borrow_mut())?;
-        
+
         msg!("Staking unlocked: lock period has ended");
     } else {
         let remaining_time = staking_data.lock_period_end - current_time;
         let remaining_days = remaining_time / 86400;
-        
+
         msg!("Staking still locked: {} days remaining", remaining_days);
     }
-    
+
     Ok(())
 }
 
-// Gestionnaire pour les fonctions de staking
+// Manager for staking functions
 pub struct StakingManager;
 
 impl StakingManager {
@@ -371,7 +370,7 @@ impl StakingManager {
     ) -> ProgramResult {
         process_deposit_staking(program_id, accounts, amount, lock_days)
     }
-    
+
     pub fn withdraw(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
@@ -379,7 +378,7 @@ impl StakingManager {
     ) -> ProgramResult {
         process_withdraw_staking(program_id, accounts, amount)
     }
-    
+
     pub fn check_unlock(
         program_id: &Pubkey,
         accounts: &[AccountInfo],

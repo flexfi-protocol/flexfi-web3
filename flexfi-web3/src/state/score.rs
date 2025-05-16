@@ -18,7 +18,7 @@ pub struct ScoreAccount {
 
 impl ScoreAccount {
     pub const SIZE: usize = 32 + 2 + 4 + 4 + 2 + 4 + 8 + 1; // 57 bytes
-    
+
     pub fn new(
         owner: Pubkey,
         initial_score: u16,
@@ -36,29 +36,29 @@ impl ScoreAccount {
             bump,
         }
     }
-    
+
     pub fn update_score(&mut self, change: i16, current_time: i64) {
         if change > 0 {
-            // Augmenter le score, maximum 1000
+            // Increase the score, maximum 1000
             let new_score = self.score.saturating_add(change as u16);
             self.score = std::cmp::min(new_score, 1000);
-            
-            // Mettre à jour les statistiques de paiement
+
+            // Update payment statistics
             self.on_time_payments = self.on_time_payments.saturating_add(1);
         } else if change < -30 {
-            // Défaut de paiement (pénalité forte)
+            // Payment default (strong penalty)
             self.score = self.score.saturating_sub(change.abs() as u16);
             self.defaults = self.defaults.saturating_add(1);
         } else if change < 0 {
-            // Paiement en retard (pénalité moyenne)
+            // Late payment (medium penalty)
             self.score = self.score.saturating_sub(change.abs() as u16);
             self.late_payments = self.late_payments.saturating_add(1);
         }
-        
-        // Mettre à jour la date de dernière mise à jour
+
+        // Update the last updated date
         self.last_updated = current_time;
     }
-    
+
     pub fn record_new_loan(&mut self, current_time: i64) {
         self.total_loans = self.total_loans.saturating_add(1);
         self.last_updated = current_time;

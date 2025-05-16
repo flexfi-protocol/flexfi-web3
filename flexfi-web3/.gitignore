@@ -30,4 +30,5 @@ Cargo.lock
 test-ledger/
 
 # Cache
-.cache/
+.cache/../SolArgosFullApp/
+../SolArgos*

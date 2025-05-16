@@ -17,15 +17,6 @@ pub enum FlexfiInstruction {
         amount: u64,
     },
     
-    // BNPL instructions
-    CreateBNPLContract {
-        amount: u64,
-        installments: u8,
-        payment_interval_days: u8,
-    },
-    MakeBNPLPayment,
-    CheckRepayment,
-    
     // NFT instructions
     MintNFT {
         nft_type: u8,
@@ -65,6 +56,17 @@ pub enum FlexfiInstruction {
     },
     RemoveFromWhitelist {
         user_pubkey: Pubkey,
+    },
+
+        
+    InitializeFlexFiAccount {
+    authorized_amount: u64,
+    duration_days: u16,
+    },
+    RevokeFundsAuthorization,
+    FlexFiSpend {
+        amount: u64,
+        merchant: Pubkey,
     },
 }
 

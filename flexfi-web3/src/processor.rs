@@ -2,18 +2,17 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     pubkey::Pubkey,
-    program_error::ProgramError,
     msg,
 };
 
 use crate::instructions::{FlexfiInstruction, decode_instruction};
 use crate::core::{staking, whitelist};
-use crate::bnpl::{checker, contract, repayment};
+use crate::bnpl::checker;  // Keep only checker
 use crate::card::manager;
-use crate::nft::{mint, attach, perks};
+use crate::nft::{mint, attach};
 use crate::score::{contract as score_contract, query as score_query};
 use crate::yield_module::{router, tracker};
-
+use crate::freeze_spend::authorization;
 
 pub fn process_instruction(
     program_id: &Pubkey,
@@ -21,21 +20,37 @@ pub fn process_instruction(
     instruction_data: &[u8],
 ) -> ProgramResult {
     let instruction = decode_instruction(instruction_data)?;
-    
+
     match instruction {
+        // New Freeze & Spend instructions (REPLACE old BNPL)
+        FlexfiInstruction::InitializeFlexFiAccount { authorized_amount, duration_days } => {
+            msg!("Instruction: Initialize FlexFi Account");
+            authorization::process_initialize_flexfi_account(
+                program_id, accounts, authorized_amount, duration_days
+            )
+        },
+        FlexfiInstruction::FlexFiSpend { amount, merchant } => {
+            msg!("Instruction: FlexFi Spend");
+            authorization::process_flexfi_spend(program_id, accounts, amount, merchant)
+        },
+        FlexfiInstruction::RevokeFundsAuthorization => {
+            msg!("Instruction: Revoke Funds Authorization");
+            authorization::process_revoke_authorization(program_id, accounts)
+        },
+
         // Core instructions
-         FlexfiInstruction::InitializeWhitelist => {
-        msg!("Instruction: Initialize Whitelist");
-        whitelist::process_initialize_whitelist(program_id, accounts)
-    },
-    FlexfiInstruction::AddToWhitelist { user_pubkey } => {
-        msg!("Instruction: Add to Whitelist");
-        whitelist::process_add_to_whitelist(program_id, accounts, user_pubkey)
-    },
-    FlexfiInstruction::RemoveFromWhitelist { user_pubkey } => {
-        msg!("Instruction: Remove from Whitelist");
-        whitelist::process_remove_from_whitelist(program_id, accounts, user_pubkey)
-    },
+        FlexfiInstruction::InitializeWhitelist => {
+            msg!("Instruction: Initialize Whitelist");
+            whitelist::process_initialize_whitelist(program_id, accounts)
+        },
+        FlexfiInstruction::AddToWhitelist { user_pubkey } => {
+            msg!("Instruction: Add to Whitelist");
+            whitelist::process_add_to_whitelist(program_id, accounts, user_pubkey)
+        },
+        FlexfiInstruction::RemoveFromWhitelist { user_pubkey } => {
+            msg!("Instruction: Remove from Whitelist");
+            whitelist::process_remove_from_whitelist(program_id, accounts, user_pubkey)
+        },
 
         FlexfiInstruction::DepositStaking { amount, lock_days } => {
             msg!("Instruction: Deposit Staking");
@@ -45,21 +60,7 @@ pub fn process_instruction(
             msg!("Instruction: Withdraw Staking");
             staking::process_withdraw_staking(program_id, accounts, amount)
         },
-        
-        // BNPL instructions
-        FlexfiInstruction::CreateBNPLContract { amount, installments, payment_interval_days } => {
-            msg!("Instruction: Create BNPL Contract");
-            contract::process_create_bnpl_contract(program_id, accounts, amount, installments, payment_interval_days)
-        },
-        FlexfiInstruction::MakeBNPLPayment => {
-            msg!("Instruction: Make BNPL Payment");
-            contract::process_make_bnpl_payment(program_id, accounts)
-        },
-        FlexfiInstruction::CheckRepayment => {
-            msg!("Instruction: Check Repayment");
-            repayment::process_check_repayment(program_id, accounts)
-        },
-        
+
         // NFT instructions
         FlexfiInstruction::MintNFT { nft_type } => {
             msg!("Instruction: Mint NFT");
@@ -73,13 +74,13 @@ pub fn process_instruction(
             msg!("Instruction: Detach NFT");
             attach::process_detach_nft(program_id, accounts)
         },
-        
+
         // Card instructions
         FlexfiInstruction::UpgradeCard { new_card_type } => {
             msg!("Instruction: Upgrade Card");
             manager::process_upgrade_card(program_id, accounts, new_card_type)
         },
-        
+
         // Score instructions
         FlexfiInstruction::InitializeScore => {
             msg!("Instruction: Initialize Score");
@@ -93,7 +94,7 @@ pub fn process_instruction(
             msg!("Instruction: Get Score");
             score_query::process_get_score(program_id, accounts)
         },
-        
+
         // Yield instructions
         FlexfiInstruction::SetYieldStrategy { strategy, auto_reinvest } => {
             msg!("Instruction: Set Yield Strategy");

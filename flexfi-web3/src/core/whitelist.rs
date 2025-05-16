@@ -14,50 +14,50 @@ use crate::error::FlexfiError;
 use crate::state::whitelist::{WhitelistAccount, UserWhitelistStatus};
 use crate::constants::{WHITELIST_SEED, HARDCODED_WHITELIST};
 
-// Vérifier si un utilisateur est dans la liste hardcodée (temporaire)
+// Check if a user is in the hardcoded list (temporary)
 pub fn is_hardcoded_whitelisted(user_pubkey: &Pubkey) -> bool {
     let user_key_str = user_pubkey.to_string();
     HARDCODED_WHITELIST.contains(&user_key_str.as_str())
 }
 
-// Vérifier si un utilisateur est whitelisté (hardcodé ou on-chain)
+// Check if a user is whitelisted (hardcoded or on-chain)
 pub fn check_user_whitelisted(
     program_id: &Pubkey,
     user_pubkey: &Pubkey,
     accounts: &[AccountInfo],
 ) -> Result<bool, ProgramError> {
-    // D'abord vérifier la liste hardcodée
+    // First check the hardcoded list
     if is_hardcoded_whitelisted(user_pubkey) {
         msg!("User {} is hardcoded whitelisted", user_pubkey);
         return Ok(true);
     }
-    
-    // Ensuite vérifier la whitelist on-chain
+
+    // Then check the on-chain whitelist
     let account_info_iter = &mut accounts.iter();
     let user_status_account = next_account_info(account_info_iter)?;
-    
-    // Vérifier le PDA
+
+    // Check the PDA
     let (user_status_pda, _) = Pubkey::find_program_address(
         &[WHITELIST_SEED, user_pubkey.as_ref()],
         program_id
     );
-    
+
     if user_status_account.key != &user_status_pda {
         return Ok(false);
     }
-    
-    // Si le compte n'existe pas, l'utilisateur n'est pas whitelisté
+
+    // If the account doesn't exist, the user is not whitelisted
     if user_status_account.data_is_empty() {
         return Ok(false);
     }
-    
-    // Charger et vérifier le statut
+
+    // Load and check the status
     let user_status = UserWhitelistStatus::try_from_slice(&user_status_account.data.borrow())?;
-    
+
     Ok(user_status.is_whitelisted)
 }
 
-// Fonction helper qui génère une erreur si l'utilisateur n'est pas whitelisté
+// Helper function that generates an error if the user is not whitelisted
 pub fn require_whitelisted(
     program_id: &Pubkey,
     user_pubkey: &Pubkey,
@@ -68,46 +68,46 @@ pub fn require_whitelisted(
         user_pubkey,
         &[user_status_account.clone()]
     )?;
-    
+
     if !is_whitelisted {
         msg!("User {} is not whitelisted and cannot use this function", user_pubkey);
         return Err(FlexfiError::Unauthorized.into());
     }
-    
+
     Ok(())
 }
 
-// Initialiser la whitelist (appelé une seule fois par un admin)
+// Initialize the whitelist (called once by an admin)
 pub fn process_initialize_whitelist(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let whitelist_account = next_account_info(account_info_iter)?;
     let authority = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
-    
-    // Vérifier que l'autorité est le signataire
+
+    // Verify that the authority is the signer
     if !authority.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Créer le PDA pour la whitelist
+
+    // Create the PDA for the whitelist
     let (whitelist_pda, bump) = Pubkey::find_program_address(
         &[WHITELIST_SEED],
         program_id
     );
-    
+
     if whitelist_account.key != &whitelist_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Créer le compte
+
+    // Create the account
     let rent = Rent::get()?;
     let space = WhitelistAccount::SIZE;
     let rent_lamports = rent.minimum_balance(space);
-    
+
     invoke_signed(
         &system_instruction::create_account(
             authority.key,
@@ -119,66 +119,66 @@ pub fn process_initialize_whitelist(
         &[authority.clone(), whitelist_account.clone(), system_program.clone()],
         &[&[WHITELIST_SEED, &[bump]]],
     )?;
-    
-    // Initialiser les données
+
+    // Initialize the data
     let whitelist_data = WhitelistAccount {
         authority: *authority.key,
         is_active: true,
         total_users: 0,
         bump,
     };
-    
+
     whitelist_data.serialize(&mut *whitelist_account.data.borrow_mut())?;
-    
+
     msg!("Whitelist initialized with authority: {}", authority.key);
     Ok(())
 }
 
-// Ajouter un utilisateur à la whitelist (appelé par le backend)
+// Add a user to the whitelist (called by the backend)
 pub fn process_add_to_whitelist(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     user_pubkey: Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let whitelist_account = next_account_info(account_info_iter)?;
     let user_status_account = next_account_info(account_info_iter)?;
     let authority = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier l'autorité
+
+    // Verify the authority
     if !authority.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger la whitelist
+
+    // Load the whitelist
     let mut whitelist_data = WhitelistAccount::try_from_slice(&whitelist_account.data.borrow())?;
-    
-    // Vérifier que l'autorité est correcte
+
+    // Verify that the authority is correct
     if whitelist_data.authority != *authority.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Créer le PDA pour le statut de l'utilisateur
+
+    // Create the PDA for the user's status
     let (user_status_pda, user_bump) = Pubkey::find_program_address(
         &[WHITELIST_SEED, user_pubkey.as_ref()],
         program_id
     );
-    
+
     if user_status_account.key != &user_status_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Obtenir l'horodatage
+
+    // Get the timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
-    
-    // Créer le compte de statut utilisateur
+
+    // Create the user status account
     let rent = Rent::get()?;
     let space = UserWhitelistStatus::SIZE;
     let rent_lamports = rent.minimum_balance(space);
-    
+
     invoke_signed(
         &system_instruction::create_account(
             authority.key,
@@ -190,8 +190,8 @@ pub fn process_add_to_whitelist(
         &[authority.clone(), user_status_account.clone(), system_program.clone()],
         &[&[WHITELIST_SEED, user_pubkey.as_ref(), &[user_bump]]],
     )?;
-    
-    // Initialiser le statut
+
+    // Initialize the status
     let user_status = UserWhitelistStatus {
         user_pubkey,
         is_whitelisted: true,
@@ -199,13 +199,13 @@ pub fn process_add_to_whitelist(
         whitelisted_by: *authority.key,
         bump: user_bump,
     };
-    
+
     user_status.serialize(&mut *user_status_account.data.borrow_mut())?;
-    
-    // Mettre à jour le compteur
+
+    // Update the counter
     whitelist_data.total_users += 1;
     whitelist_data.serialize(&mut *whitelist_account.data.borrow_mut())?;
-    
+
     msg!("User {} added to whitelist", user_pubkey);
     Ok(())
 }
@@ -216,50 +216,50 @@ pub fn process_remove_from_whitelist(
     user_pubkey: Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let whitelist_account = next_account_info(account_info_iter)?;
     let user_status_account = next_account_info(account_info_iter)?;
     let authority = next_account_info(account_info_iter)?;
-    
-    // Vérifier l'autorité
+
+    // Verify the authority
     if !authority.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Charger la whitelist
+
+    // Load the whitelist
     let mut whitelist_data = WhitelistAccount::try_from_slice(&whitelist_account.data.borrow())?;
-    
-    // Vérifier que l'autorité est correcte
+
+    // Verify that the authority is correct
     if whitelist_data.authority != *authority.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier le PDA du statut utilisateur
+
+    // Verify the user status PDA
     let (user_status_pda, _) = Pubkey::find_program_address(
         &[WHITELIST_SEED, user_pubkey.as_ref()],
         program_id
     );
-    
+
     if user_status_account.key != &user_status_pda {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Charger le statut de l'utilisateur
+
+    // Load the user status
     let mut user_status = UserWhitelistStatus::try_from_slice(&user_status_account.data.borrow())?;
-    
-    // Vérifier que c'est le bon utilisateur
+
+    // Verify that it's the correct user
     if user_status.user_pubkey != user_pubkey {
         return Err(ProgramError::InvalidAccountData);
     }
-    
-    // Marquer comme non whitelisté
+
+    // Mark as not whitelisted
     user_status.is_whitelisted = false;
     user_status.serialize(&mut *user_status_account.data.borrow_mut())?;
-    
-    // Décrémenter le compteur (attention aux underflows)
+
+    // Decrement the counter (beware of underflows)
     whitelist_data.total_users = whitelist_data.total_users.saturating_sub(1);
     whitelist_data.serialize(&mut *whitelist_account.data.borrow_mut())?;
-    
+
     msg!("User {} removed from whitelist", user_pubkey);
     Ok(())
 }

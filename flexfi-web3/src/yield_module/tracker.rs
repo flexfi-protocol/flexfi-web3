@@ -17,7 +17,7 @@ pub fn process_claim_yield(
     amount: u64,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let yield_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
     let user_token_account = next_account_info(account_info_iter)?;
@@ -25,8 +25,8 @@ pub fn process_claim_yield(
     let yield_token_account = next_account_info(account_info_iter)?;
     let token_program = next_account_info(account_info_iter)?;
     let clock_sysvar = next_account_info(account_info_iter)?;
-    
-    // Vérifier la signature de l'utilisateur
+
+    // Verify user signature
     if !user_account.is_signer {
         return Err(FlexfiError::Unauthorized.into());
     }
@@ -36,51 +36,51 @@ pub fn process_claim_yield(
         user_account.key,
         user_status_account
     )?;
-    
-    // Charger les données du yield
+
+    // Load yield data
     let mut yield_data = YieldAccount::try_from_slice(&yield_account.data.borrow())?;
-    
-    // Vérifier la propriété
+
+    // Verify ownership
     if yield_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Vérifier si le montant demandé est disponible
+
+    // Check if the requested amount is available
     let unclaimed_yield = yield_data.get_unclaimed_yield();
     if amount > unclaimed_yield {
         return Err(FlexfiError::NoYieldToClaim.into());
     }
-    
-    // Obtenir l'horodatage actuel
+
+    // Get current timestamp
     let clock = Clock::from_account_info(clock_sysvar)?;
     let current_time = clock.unix_timestamp;
-    
-    // Si auto_reinvest est activé et que le montant est inférieur à un seuil,
-    // réinvestir automatiquement
+
+    // If auto_reinvest is enabled and the amount is below a threshold,
+    // automatically reinvest
     if yield_data.auto_reinvest && amount < 1_000_000 {
-        // Réinvestir automatiquement (logique simplifiée)
+        // Auto-reinvest (simplified logic)
         yield_data.record_yield_claimed(amount, current_time)?;
         yield_data.record_yield_earned(amount);
-        
+
         msg!("Yield auto-reinvested: {}", amount);
     } else {
-        // Transférer le yield depuis le compte de yield vers le compte de l'utilisateur
+        // Transfer yield from yield account to user account
         let transfer_ix = spl_token::instruction::transfer(
             token_program.key,
             yield_token_account.key,
             user_token_account.key,
-            yield_account.key, // L'autorité est le PDA du yield
+            yield_account.key, // Authority is the yield PDA
             &[],
             amount,
         )?;
-        
-        // Obtenir les seeds pour signer
+
+        // Get seeds for signing
         let seeds = [
             b"yield_config",
             user_account.key.as_ref(),
             &[yield_data.bump],
         ];
-        
+
         solana_program::program::invoke_signed(
             &transfer_ix,
             &[
@@ -91,16 +91,16 @@ pub fn process_claim_yield(
             ],
             &[&seeds],
         )?;
-        
-        // Enregistrer le yield réclamé
+
+        // Record claimed yield
         yield_data.record_yield_claimed(amount, current_time)?;
-        
+
         msg!("Yield claimed: {}", amount);
     }
-    
-    // Sauvegarder les modifications
+
+    // Save changes
     yield_data.serialize(&mut *yield_account.data.borrow_mut())?;
-    
+
     Ok(())
 }
 
@@ -109,26 +109,26 @@ pub fn process_get_yield_stats(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-    
+
     let yield_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
-    
-    // Charger les données du yield
+
+    // Load yield data
     let yield_data = YieldAccount::try_from_slice(&yield_account.data.borrow())?;
-    
-    // Vérifier la propriété
+
+    // Verify ownership
     if yield_data.owner != *user_account.key {
         return Err(FlexfiError::Unauthorized.into());
     }
-    
-    // Afficher les statistiques
+
+    // Display statistics
     msg!("Yield statistics:");
     msg!("Total yield earned: {}", yield_data.total_yield_earned);
     msg!("Total yield claimed: {}", yield_data.total_yield_claimed);
     msg!("Unclaimed yield: {}", yield_data.get_unclaimed_yield());
     msg!("Strategy: {:?}", yield_data.get_strategy()?);
     msg!("Auto-reinvest: {}", yield_data.auto_reinvest);
-    
+
     Ok(())
 }
 

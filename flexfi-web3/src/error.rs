@@ -3,73 +3,73 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Copy, Clone)]
 pub enum FlexfiError {
-    #[error("Le protocole est en pause")]
+    #[error("Protocol is paused")]
     ProtocolPaused,
-    
-    #[error("Le montant dépasse le maximum autorisé")]
+
+    #[error("Amount exceeds the maximum allowed")]
     AmountTooHigh,
-    
-    #[error("Trop de prêts cette année")]
+
+    #[error("Too many loans this year")]
     TooManyLoans,
-    
-    #[error("Collatéral insuffisant")]
+
+    #[error("Insufficient collateral")]
     InsufficientCollateral,
-    
-    #[error("Débordement arithmétique")]
+
+    #[error("Arithmetic overflow")]
     MathOverflow,
-    
-    #[error("Nombre d'échéances invalide")]
+
+    #[error("Invalid number of installments")]
     InvalidInstallments,
-    
-    #[error("Échéance non autorisée pour ce type de carte")]
+
+    #[error("Installment not allowed for this card type")]
     InvalidInstallmentForCard,
-    
-    #[error("Prêt inactif")]
+
+    #[error("Loan is inactive")]
     LoanNotActive,
-    
-    #[error("Prêt déjà remboursé")]
+
+    #[error("Loan already repaid")]
     LoanAlreadyPaid,
-    
-    #[error("Période de grâce non expirée")]
+
+    #[error("Grace period not expired")]
     GracePeriodNotExpired,
-    
-    #[error("Non autorisé")]
+
+    #[error("Unauthorized")]
     Unauthorized,
-    
-    #[error("Frais trop élevés")]
+
+    #[error("Fees too high")]
     FeeTooHigh,
-    
-    #[error("Déjà à ce niveau")]
+
+    #[error("Already at this level")]
     AlreadyAtThisLevel,
-    
-    #[error("Type de carte non valide")]
+
+    #[error("Invalid card type")]
     InvalidCardType,
-    
-    #[error("Type de NFT non valide")]
+
+    #[error("Invalid NFT type")]
     InvalidNFTType,
-    
-    #[error("Pas de rendement à réclamer")]
+
+    #[error("No yield to claim")]
     NoYieldToClaim,
-    
-    #[error("Staking insuffisant")]
+
+    #[error("Insufficient staking")]
     InsufficientStaking,
-    
-    #[error("Staking non actif")]
+
+    #[error("Staking not active")]
     StakingNotActive,
-    
-    #[error("Staking gelé")]
+
+    #[error("Staking frozen")]
     StakingFrozen,
-    
-    #[error("Wallet inactif")]
+
+    #[error("Wallet inactive")]
     WalletInactive,
-    
-    #[error("NFT expiré")]
+
+    #[error("NFT expired")]
     NFTExpired,
-    
-    #[error("Paiement en retard")]
+
+    #[error("Payment overdue")]
     PaymentOverdue,
-    
-    #[error("Collatéral insuffisant pour le débit automatique")]
+
+    #[error("Insufficient collateral for auto debit")]
     InsufficientCollateralForAutoDebit,
 }
 
